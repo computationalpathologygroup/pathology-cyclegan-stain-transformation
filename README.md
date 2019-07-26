@@ -1,1 +1,1 @@
-"# pathology-cyclegan-stain-transformation" 
+# pathology-cyclegan-stain-transformation
