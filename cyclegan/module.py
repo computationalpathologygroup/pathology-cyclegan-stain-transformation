@@ -51,11 +51,11 @@ def discriminator(image, options, reuse=False, name="discriminator"):
         # h4 is (4 x 4 x 1)
         return h4_output, h7_output
 
-def conv_block(_input, level, filters, padding, residual=False):
+def conv_block(_input, level, filters, padding, residual=False, regularization=0.0):
     name1 = 'g_d{}_conv1'.format(level)
     name2 = 'g_d{}_conv2'.format(level)
-    _input = tf.pad(_input, [[0, 0], [2, 2], [2, 2], [0, 0]], "REFLECT")
-    net = lrelu(instance_norm(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1),
+    net = lrelu(instance_norm(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
+                                     reg=regularization),
                         name='g_d{}_in1'.format(level)))
     tf.summary.histogram("conv1_{}".format(level), net)
     if residual and level > 0:
@@ -64,11 +64,12 @@ def conv_block(_input, level, filters, padding, residual=False):
                                          ks=3,
                                          s=1,
                                          padding=padding,
-                                         name='g_d{}_res'.format(level)),
+                                         name='g_d{}_res'.format(level),
+                                         reg=regularization),
                                   name='g_d{}_in2'.format(level)))
         net = _input + net
     else:
-        net = lrelu(instance_norm(conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2),
+        net = lrelu(instance_norm(conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2, reg=regularization),
                                   name='g_d{}_in2'.format(level)))
         tf.summary.histogram("conv2_{}".format(level), net)
     return net
@@ -79,7 +80,7 @@ def unet_block(_input, level, options):
     if options.unet_depth - level > 0:
         with tf.variable_scope("down"):
             down_block = conv_block(_input, level, filters=filters, padding=options.padding,
-                                    residual=options.unet_residual)
+                                    residual=options.unet_residual, regularization=options.regularization)
         if options.use_maxpool:
             net = maxpool(down_block, name='g_d{}_maxpool'.format(level))
         else:
@@ -89,9 +90,11 @@ def unet_block(_input, level, options):
         net = tf.concat([down_block, net], 3)
         # net = tf.concat([down_block, instance_norm(net, name='g_d{}_deconv_bn'.format(level))], 3)
         with tf.variable_scope("up"):
-            net = conv_block(net, level, filters=filters, padding=options.padding, residual=options.unet_residual)
+            net = conv_block(net, level, filters=filters, padding=options.padding, residual=options.unet_residual,
+                             regularization=options.regularization)
     else:
-        net = conv_block(_input, level, filters=filters, padding=options.padding, residual=options.unet_residual)
+        net = conv_block(_input, level, filters=filters, padding=options.padding, residual=options.unet_residual,
+                         regularization=options.regularization)
     return net
 
 

@@ -59,10 +59,10 @@ class cyclegan(object):
         self.normalization = model_params['normalization']
         self._initial_standalone_generator = training_params['initial_standalone_generator']
 
-        OPTIONS = namedtuple('OPTIONS', 'use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual')
+        OPTIONS = namedtuple('OPTIONS', 'use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
         self.options = OPTIONS._make((model_params['use_maxpool'], model_params['ngf'], model_params['ndf'],
                                       self.output_c_dim, model_params['unet_depth'], model_params['padding'],
-                                      model_params['unet_residual']))
+                                      model_params['unet_residual'], model_params['regularization']))
 
     def _build_model(self):
         self.real_data = tf.placeholder(tf.float32,
@@ -183,7 +183,8 @@ class cyclegan(object):
             # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
             lr = self.learning_rate if epoch < self.lr_decay_epoch else self.learning_rate * (self.epochs - epoch) / (
                         self.epochs - self.lr_decay_epoch)
-            identity_lambda = float(max(self.id_lambda - epoch * 0.075 * self.id_lambda, 0))
+            identity_lambda = float(max(self.id_lambda - epoch * 0.25 * self.id_lambda, 0))
+            print(identity_lambda)
             if self._initial_standalone_generator:
                 D_lambda = 0 if identity_lambda > 0 else self.D_lambda
             else:
@@ -202,7 +203,7 @@ class cyclegan(object):
                      dataB[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1)), axis=3)
                 # Update G network and record fake outputs
                 fake_A, fake_B, _, summary_str, summary_t, fake_A_, fake_B_, g_loss = self.sess.run(
-                    [self.fake_A, self.fake_B, self.g_optim, self.t_sum, self.g_sum, self.fake_A_, self.fake_B_, self.g_loss],
+                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum, self.t_sum, self.fake_A_, self.fake_B_, self.g_loss],
                     feed_dict={self.real_data: batch_images, self.lr: lr, self.identity_lambda: identity_lambda,
                                self.D_lambda_var: D_lambda})
 
@@ -223,7 +224,8 @@ class cyclegan(object):
                         self.write_debugger(batch_images[:,:,:,:3], fake_A_, batch_images[:,:,:,3:], fake_B_,
                                             epoch, idx)
 
-                self.writer.add_summary(summary_t, counter)
+                if np.mod(counter, 200) == 0:
+                    self.writer.add_summary(summary_t, counter)
                 self.writer.add_summary(summary_str, counter)
                 # [fake_A, fake_B] = self.pool([fake_A, fake_B])
 

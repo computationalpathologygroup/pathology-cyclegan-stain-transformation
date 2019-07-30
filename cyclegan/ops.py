@@ -20,24 +20,22 @@ def instance_norm(input, name="instance_norm"):
         normalized = (input-mean) / (variance + epsilon) ** 0.5
         return scale*normalized + offset
 
-def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="conv2d"):
-    # if padding == "REFLECT":
-    #     x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
-    #     p = "VALID"
-    # else:
-    #     x = input_
-    #     p = padding
+def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="conv2d", reg=0.0):
+    if padding == "REFLECT":
+        x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
+        p = "VALID"
+    else:
+        x = input_
+        p = padding
     with tf.variable_scope(name):
-        # print("input shape is: {}".format(x.get_shape()))
-        y = tf.layers.conv2d(inputs=input_,
+        y = tf.layers.conv2d(inputs=x,
                              filters=output_dim,
                              kernel_size=ks,
                              strides=s,
-                             padding=padding,
+                             padding=p,
                              use_bias=False,
                              kernel_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                             kernel_regularizer=tf.keras.regularizers.l2(0.001))
-        # print("output shape is: {}".format(y.get_shape()))
+                             kernel_regularizer=tf.keras.regularizers.l2(reg))
         return y
 
 def maxpool(input, kernel_size=[2, 2], name="maxpool"):
