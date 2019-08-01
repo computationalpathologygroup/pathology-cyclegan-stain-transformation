@@ -15,6 +15,7 @@ class cyclegan(object):
         self.run_name = args['run_name']
         self.sample_dir = os.path.join(self.output_dir, 'samples', self.run_name)
         self.debug_data = args['debug_data']
+        self.numpy_patches_dump_path = '/mnt/netcache/pathology/datasets/Prostate/tma_scientificdata/patches/26580_patches.npy'
 
         self.discriminator = discriminator
         self.generator = generator_unet
@@ -178,7 +179,7 @@ class cyclegan(object):
             # np.random.shuffle(dataA)
             # np.random.shuffle(dataB)
             # dataA = next(source_generator) # TMA-CHANGE
-            dataA, _ = source_generator.batch(self.batch_size)
+            dataA = next(source_generator)
             dataB, _ = target_generator.batch(self.batch_size)
             # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
             lr = self.learning_rate if epoch < self.lr_decay_epoch else self.learning_rate * (self.epochs - epoch) / (
@@ -190,7 +191,6 @@ class cyclegan(object):
             else:
                 D_lambda = self.D_lambda
             target_generator.load()
-            source_generator.load()  # TMA-CHANGE
 
             for idx in range(0, self.batch_size, self.mini_batch_size):
                 # batch_files = list(zip(dataA[idx * self.batch_size:(idx + 1) * self.batch_size],
@@ -199,7 +199,7 @@ class cyclegan(object):
                 #                 batch_files]
                 # batch_images = np.array(batch_images).astype(np.float32)
                 batch_images = np.concatenate(
-                    (dataA[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1),  # TMA-CHANGE
+                    (dataA[0]['patches'][idx:idx + self.mini_batch_size],
                      dataB[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1)), axis=3)
                 # Update G network and record fake outputs
                 fake_A, fake_B, _, summary_str, summary_t, fake_A_, fake_B_, g_loss = self.sess.run(
@@ -252,31 +252,22 @@ class cyclegan(object):
                     self.save(counter)
                 counter += 1
             target_generator.wait()
-            source_generator.wait()  # TMA-CHANGE
             target_generator.transfer()
-            source_generator.transfer()  # TMA-CHANGE
 
 
     def get_data_generators(self):
         target_generator = patch_gen.get_generator_from_config(config_path=self.param_file_path,
                                                                data_config_path=self.data_file_path,
                                                                generator_key='target')
-        source_generator = patch_gen.get_generator_from_config(config_path=self.param_file_path,
-                                                               data_config_path=self.data_file_path,
-                                                               generator_key='source')
-
+        print("Initializing numpy dump generator for source generator")
+        source_generator = self.numpy_dump_generator(self.batch_size)
         print("starting")
         target_generator.start()
-        source_generator.start()
         print("stepping")
         target_generator.step()
-        source_generator.step()
         target_generator.wait()
-        source_generator.wait()
         print("filling")
-        source_generator.fill()
         target_generator.fill()
-        source_generator.wait()
         target_generator.wait()
 
         return source_generator, target_generator
@@ -335,6 +326,17 @@ class cyclegan(object):
                     '{}/A_{:d}_{:d}_cycle.jpg'.format(self.sample_dir, epoch, idx), self.normalization)
         save_images(fake_B_, [self.mini_batch_size, 1],
                     '{}/B_{:d}_{:d}_cycle.jpg'.format(self.sample_dir, epoch, idx), self.normalization)
+
+    def numpy_dump_generator(self, batch_size):
+        # TMA-CHANGE
+        print(
+            f"Loading data file from: {self.numpy_patches_dump_path}")
+        data = np.load(self.numpy_patches_dump_path)
+        print(f"Data dimensions: {data.shape}")
+        while (True):
+            idxs = np.random.choice(data.shape[0], batch_size, replace=False)
+            yield [{'patches': (data[idxs] / 127.5) - 1}]
+
 
     def predict(self, image, a2b=True):
         placeholder = np.zeros(image.shape)
