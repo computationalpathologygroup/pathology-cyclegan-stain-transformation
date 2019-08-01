@@ -208,13 +208,6 @@ class cyclegan(object):
                                self.D_lambda_var: D_lambda})
 
                 if self.debug_data:
-                    # print('generatorA2B/g_d3_conv1/conv2d/kernel:0')
-                    # print(np.mean(self.sess.run('generatorA2B/g_d3_conv1/conv2d/kernel:0')))
-                    # print(np.min(self.sess.run('generatorA2B/g_d3_conv1/conv2d/kernel:0')))
-                    # print(np.max(self.sess.run('generatorA2B/g_d3_conv1/conv2d/kernel:0')))
-                    # print('generatorA2B/g_conv_final/conv2d/kernel:0')
-                    # print(np.min(self.sess.run('generatorA2B/g_conv_final/conv2d/kernel:0')))
-                    # print(np.max(self.sess.run('generatorA2B/g_conv_final/conv2d/kernel:0')))
                     print("gen:")
                     tvars_vals = self.sess.run(tvars)
                     print(g_loss)
