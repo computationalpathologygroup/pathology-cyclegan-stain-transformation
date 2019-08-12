@@ -23,14 +23,14 @@ class cyclegan(object):
         self.param_file_path = args['param_file_path']
         if args['data_file_path']:
             self.data_file_path = args['data_file_path']
-            self.criterion_cycle = focal_abs_criterion
+            self.cycle_loss = focal_abs_criterion
         else:
-            self.criterion_cycle = abs_criterion
+            self.cycle_loss = abs_criterion
         self.configure_variables()
         if self.use_logloss:
-            self.criterionGAN = sce_criterion
+            self.disc_loss = sce_criterion
         else:
-            self.criterionGAN = mae_criterion
+            self.disc_loss = mae_criterion
 
         self._build_model()
 
@@ -82,22 +82,22 @@ class cyclegan(object):
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
         self.DA_fake = self.discriminator(self.fake_A, self.options, reuse=False, name="discriminatorA")
 
-        self.g_loss_a2b = self.D_lambda_var * self.criterionGAN(self.DB_fake, True)
-        self.g_loss_b2a = self.D_lambda_var * self.criterionGAN(self.DA_fake, True)
-        self.g_loss_a2a = self.L1_lambda * self.criterion_cycle(self.real_A, self.fake_A_, self.options.padding)
-        self.g_loss_b2b = self.L1_lambda * self.criterion_cycle(self.real_B, self.fake_B_, self.options.padding)
-        self.g_cycle_loss = self.L1_lambda * self.criterion_cycle(self.real_A, self.fake_A_, self.options.padding) \
-                            + self.L1_lambda * self.criterion_cycle(self.real_B, self.fake_B_, self.options.padding)
-        self.g_disc_loss = self.D_lambda_var * self.criterionGAN(self.DA_fake, True) \
-                           + self.D_lambda_var * self.criterionGAN(self.DB_fake, True)
-        self.g_loss = self.D_lambda_var * self.criterionGAN(self.DA_fake, True) \
-                      + self.D_lambda_var * self.criterionGAN(self.DB_fake, True) \
-                      + self.L1_lambda * self.criterion_cycle(self.real_A, self.fake_A_, self.options.padding) \
-                      + self.L1_lambda * self.criterion_cycle(self.real_B, self.fake_B_, self.options.padding) \
+        self.g_loss_a2b = self.D_lambda_var * self.disc_loss(self.DB_fake, True)
+        self.g_loss_b2a = self.D_lambda_var * self.disc_loss(self.DA_fake, True)
+        self.g_loss_a2a = self.L1_lambda * self.cycle_loss(self.real_A, self.fake_A_, self.options.padding)
+        self.g_loss_b2b = self.L1_lambda * self.cycle_loss(self.real_B, self.fake_B_, self.options.padding)
+        self.g_cycle_loss = self.L1_lambda * self.cycle_loss(self.real_A, self.fake_A_, self.options.padding) \
+                            + self.L1_lambda * self.cycle_loss(self.real_B, self.fake_B_, self.options.padding)
+        self.g_disc_loss = self.D_lambda_var * self.disc_loss(self.DA_fake, True) \
+                           + self.D_lambda_var * self.disc_loss(self.DB_fake, True)
+        self.g_loss = self.D_lambda_var * self.disc_loss(self.DA_fake, True) \
+                      + self.D_lambda_var * self.disc_loss(self.DB_fake, True) \
+                      + self.L1_lambda * self.cycle_loss(self.real_A, self.fake_A_, self.options.padding) \
+                      + self.L1_lambda * self.cycle_loss(self.real_B, self.fake_B_, self.options.padding) \
                       + tf.losses.get_regularization_loss()
         if self.id_lambda > 0.0:
-            self.g_loss += self.identity_lambda * self.criterion_cycle(self.real_A, self.fake_B, self.options.padding) \
-                           + self.identity_lambda * self.criterion_cycle(self.real_B, self.fake_A, self.options.padding)
+            self.g_loss += self.identity_lambda * self.cycle_loss(self.real_A, self.fake_B, self.options.padding) \
+                           + self.identity_lambda * self.cycle_loss(self.real_B, self.fake_A, self.options.padding)
 
         # + self.l2_lambda * tf.nn.l2_loss(self.g_vars)
         self.fake_A_sample = tf.placeholder(tf.float32, [None, None, None, self.input_c_dim], name='fake_A_sample')
@@ -108,11 +108,11 @@ class cyclegan(object):
         self.DB_fake_sample = self.discriminator(self.fake_B_sample, self.options, reuse=True, name="discriminatorB")
         self.DA_fake_sample = self.discriminator(self.fake_A_sample, self.options, reuse=True, name="discriminatorA")
 
-        self.db_loss_real = self.criterionGAN(self.DB_real, True)
-        self.db_loss_fake = self.criterionGAN(self.DB_fake_sample, False)
+        self.db_loss_real = self.disc_loss(self.DB_real, True)
+        self.db_loss_fake = self.disc_loss(self.DB_fake_sample, False)
         self.db_loss = (self.db_loss_real + self.db_loss_fake) / 2
-        self.da_loss_real = self.criterionGAN(self.DA_real, True)
-        self.da_loss_fake = self.criterionGAN(self.DA_fake_sample, False)
+        self.da_loss_real = self.disc_loss(self.DA_real, True)
+        self.da_loss_fake = self.disc_loss(self.DA_fake_sample, False)
         self.da_loss = (self.da_loss_real + self.da_loss_fake) / 2
         self.d_loss = self.da_loss + self.db_loss  # + self.l2_lambda * tf.nn.l2_loss(self.d_vars)
 
@@ -139,6 +139,8 @@ class cyclegan(object):
              self.db_loss_sum, self.db_loss_real_sum, self.db_loss_fake_sum,
              self.d_loss_sum])
 
+
+
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
         self.g_vars = [var for var in t_vars if 'generator' in var.name]
@@ -147,7 +149,7 @@ class cyclegan(object):
     def train(self, continue_train):
         """Train cyclegan"""
         self.lr = tf.placeholder(tf.float32, None, name='learning_rate')
-        self.d_optim = tf.train.AdamOptimizer(self.lr, beta1=self.beta1) \
+        self.d_optim = tf.train.AdamOptimizer(self.lr * 0.5, beta1=self.beta1) \
             .minimize(self.d_loss, var_list=self.d_vars)
         self.g_optim = tf.train.AdamOptimizer(self.lr, beta1=self.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
@@ -172,16 +174,10 @@ class cyclegan(object):
             os.makedirs(config_dir)
         shutil.copy(self.param_file_path, config_dir)
         source_generator, target_generator = self.get_data_generators()
-        
+        generator_iterations = 1
         for epoch in range(self.epochs):
-            # dataA = glob('./datasets/{}/* .*'.format(self.dataset_dir + '/trainA'))
-            # dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainB'))
-            # np.random.shuffle(dataA)
-            # np.random.shuffle(dataB)
-            # dataA = next(source_generator) # TMA-CHANGE
             dataA = next(source_generator)
             dataB, _ = target_generator.batch(self.batch_size)
-            # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
             lr = self.learning_rate if epoch < self.lr_decay_epoch else self.learning_rate * (self.epochs - epoch) / (
                         self.epochs - self.lr_decay_epoch)
             identity_lambda = float(max(self.id_lambda - epoch * 0.25 * self.id_lambda, 0))
@@ -202,10 +198,12 @@ class cyclegan(object):
                     (dataA[0]['patches'][idx:idx + self.mini_batch_size],
                      dataB[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1)), axis=3)
                 # Update G network and record fake outputs
-                fake_A, fake_B, _, summary_str, summary_t, fake_A_, fake_B_, g_loss = self.sess.run(
-                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum, self.t_sum, self.fake_A_, self.fake_B_, self.g_loss],
-                    feed_dict={self.real_data: batch_images, self.lr: lr, self.identity_lambda: identity_lambda,
-                               self.D_lambda_var: D_lambda})
+                for _ in range(generator_iterations):
+                    fake_A, fake_B, _, summary_str, summary_t, fake_A_, fake_B_, g_loss, a2b, b2a = self.sess.run(
+                        [self.fake_A, self.fake_B, self.g_optim, self.g_sum, self.t_sum, self.fake_A_, self.fake_B_,
+                         self.g_loss, self.g_loss_a2b, self.g_loss_b2a],
+                        feed_dict={self.real_data: batch_images, self.lr: lr, self.identity_lambda: identity_lambda,
+                                   self.D_lambda_var: D_lambda})
 
                 if self.debug_data:
                     print("gen:")
@@ -231,6 +229,8 @@ class cyclegan(object):
                                self.fake_A_sample: fake_A,
                                self.fake_B_sample: fake_B,
                                self.lr: lr})
+                generator_iterations = min(1, np.ceil((a2b+b2a) / d_loss))
+
                 if self.debug_data:
                     print("disc:")
                     print(d_loss)

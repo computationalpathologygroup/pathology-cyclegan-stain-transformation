@@ -13,14 +13,14 @@ def batch_norm(x, name="batch_norm"):
 def instance_norm(input, name="instance_norm"):
     with tf.variable_scope(name):
         depth = input.get_shape()[3]
-        scale = tf.get_variable("scale", [depth], initializer=tf.random_normal_initializer(1.0, 0.02, dtype=tf.float32))
+        scale = tf.get_variable("scale", [depth], initializer=tf.random_normal_initializer(1.0, 0.01, dtype=tf.float32))
         offset = tf.get_variable("offset", [depth], initializer=tf.constant_initializer(0.0))
         mean, variance = tf.nn.moments(input, axes=[1,2], keep_dims=True)
         epsilon = 5e-2
-        normalized = (input-mean) / (variance + epsilon) ** 0.5
+        normalized = (input-mean) / ((variance + epsilon) ** 0.5)
         return scale*normalized + offset
 
-def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="conv2d", reg=0.0):
+def conv2d(input_, output_dim, ks=4, s=2, stddev=0.01, padding='SAME', name="conv2d", reg=0.0):
     if padding == "REFLECT":
         x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
         p = "VALID"

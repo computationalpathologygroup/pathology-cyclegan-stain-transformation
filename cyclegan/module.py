@@ -39,17 +39,17 @@ def discriminator(image, options, reuse=False, name="discriminator"):
         # h2 is (32x 32 x self.df_dim*4)
         h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv'), 'd_bn3'))
         # h2 is (16x 16 x self.df_dim*4)
-        h4 = lrelu(instance_norm(conv2d(h3, options.df_dim * 4, name='d_h4_conv'), 'd_bn4'))
-        h4_1 = lrelu(instance_norm(conv2d(h3, options.df_dim * 8, s=1, name='d_h41_conv'), 'd_bn41'))
-        h4_output = conv2d(h4_1, 1, s=1, name='d_h4_pred')
+        h4 = conv2d(h3, 1, s=1, name='d_h3_pred')
+        # h4_1 = lrelu(instance_norm(conv2d(h4, options.df_dim * 8, s=1, name='d_h41_conv'), 'd_bn41'))
+        # h4_output = conv2d(h4_1, 1, s=1, name='d_h4_pred')
         # h2 is (8x 8 x self.df_dim*4)
-        h5 = lrelu(instance_norm(conv2d(h4, options.df_dim * 4, name='d_h5_conv'), 'd_bn5'))
+        # h5 = lrelu(instance_norm(conv2d(h4, options.df_dim * 4, name='d_h5_conv'), 'd_bn5'))
         # h2 is (4x 4 x self.df_dim*4)
-        h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, s=1, name='d_h6_conv'), 'd_bn6'))
+        # h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, s=1, name='d_h6_conv'), 'd_bn6'))
         # h3 is (4 x 4 x self.df_dim*8)
-        h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
+        # h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
         # h4 is (4 x 4 x 1)
-        return h4_output, h7_output
+        return h4 # , h7_output
 
 def conv_block(_input, level, filters, padding, residual=False, regularization=0.0):
     name1 = 'g_d{}_conv1'.format(level)
@@ -106,7 +106,7 @@ def generator_unet(image, options, reuse=False, name="generator"):
             assert tf.get_variable_scope().reuse is False
         net = unet_block(image, 0, options)
         output = conv2d(net, options.output_c_dim, ks=1, s=1, padding='VALID', name='g_conv_final')
-        return tf.nn.tanh(output) + image
+        return 2 * tf.nn.tanh(output) + image
 
 
 # def generator_resnet(image, options, reuse=False, name="generator"):
@@ -167,9 +167,9 @@ def abs_criterion(in_, target, padding="SAME"):
 
 def mae_criterion(in_, target):
     if target:
-        return tf.reduce_mean((in_[0] - tf.ones_like(in_[0])) ** 2) + tf.reduce_mean((in_[1] - tf.ones_like(in_[1])) ** 2)
+        return tf.reduce_mean((in_[0] - tf.ones_like(in_[0])) ** 2) # + tf.reduce_mean((in_[1] - tf.ones_like(in_[1])) ** 2)
     else:
-        return tf.reduce_mean((in_[0] - tf.zeros_like(in_[0])) ** 2) + tf.reduce_mean((in_[1] - tf.zeros_like(in_[1])) ** 2)
+        return tf.reduce_mean((in_[0] - tf.zeros_like(in_[0])) ** 2) # + tf.reduce_mean((in_[1] - tf.zeros_like(in_[1])) ** 2)
 
 
 def sce_criterion(logits, labels):
