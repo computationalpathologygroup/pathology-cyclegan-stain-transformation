@@ -2,11 +2,12 @@ from __future__ import division
 import os
 import time
 from collections import namedtuple
-import stroma.utils.generator as patch_gen
 import yaml
 import shutil
-from cyclegan.module import *
-from cyclegan.utils import *
+from .module import *
+from .utils import *
+import numpy as np
+
 
 class cyclegan(object):
     def __init__(self, sess, args):
@@ -42,6 +43,7 @@ class cyclegan(object):
         model_params = parameters['model']
         training_params = parameters['training']
 
+        self.spacing = training_params['spacing']
         self.iterations = training_params['iterations']
         self.mini_batch_size = training_params['mini_batch_size']
         self.batch_size = training_params['iterations']['source']['batch size']
@@ -57,9 +59,10 @@ class cyclegan(object):
         self.input_c_dim = model_params['input_c_dim']
         self.output_c_dim = model_params['output_c_dim']
         self.normalization = model_params['normalization']
-        self._initial_standalone_generator = training_params['initial_standalone_generator']
+        self._disc_standalone_epochs = training_params['disc_standalone_epochs']
 
-        OPTIONS = namedtuple('OPTIONS', 'use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
+        OPTIONS = namedtuple('OPTIONS',
+                             'use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
         self.options = OPTIONS._make((model_params['use_maxpool'], model_params['ngf'], model_params['ndf'],
                                       self.output_c_dim, model_params['unet_depth'], model_params['padding'],
                                       model_params['unet_residual'], model_params['regularization']))
@@ -171,39 +174,26 @@ class cyclegan(object):
             os.makedirs(config_dir)
         shutil.copy(self.param_file_path, config_dir)
         source_generator, target_generator = self.get_data_generators()
-        
+
         for epoch in range(self.epochs):
-            # dataA = glob('./datasets/{}/* .*'.format(self.dataset_dir + '/trainA'))
-            # dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainB'))
-            # np.random.shuffle(dataA)
-            # np.random.shuffle(dataB)
-            # dataA = next(source_generator) # TMA-CHANGE
             dataA, _ = source_generator.batch(self.batch_size)
             dataB, _ = target_generator.batch(self.batch_size)
-            # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
             lr = self.learning_rate if epoch < self.lr_decay_epoch else self.learning_rate * (self.epochs - epoch) / (
-                        self.epochs - self.lr_decay_epoch)
+                    self.epochs - self.lr_decay_epoch)
             identity_lambda = float(max(self.id_lambda - epoch * 0.25 * self.id_lambda, 0))
             print(identity_lambda)
-            if self._initial_standalone_generator:
-                D_lambda = 0 if identity_lambda > 0 else self.D_lambda
-            else:
-                D_lambda = self.D_lambda
+            D_lambda = self.D_lambda
             target_generator.load()
             source_generator.load()  # TMA-CHANGE
 
             for idx in range(0, self.batch_size, self.mini_batch_size):
-                # batch_files = list(zip(dataA[idx * self.batch_size:(idx + 1) * self.batch_size],
-                #                        dataB[idx * self.batch_size:(idx + 1) * self.batch_size]))
-                # batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in
-                #                 batch_files]
-                # batch_images = np.array(batch_images).astype(np.float32)
                 batch_images = np.concatenate(
-                    (dataA[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1),  # TMA-CHANGE
-                     dataB[0]['patches'][idx:idx + self.mini_batch_size].transpose(0, 2, 3, 1)), axis=3)
-                # Update G network and record fake outputs
+                    (dataA[self.spacing]['patches'][idx:idx + self.mini_batch_size],  # TMA-CHANGE
+                     dataB[self.spacing]['patches'][idx:idx + self.mini_batch_size]), axis=3)
+
                 fake_A, fake_B, _, summary_str, summary_t, fake_A_, fake_B_, g_loss = self.sess.run(
-                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum, self.t_sum, self.fake_A_, self.fake_B_, self.g_loss],
+                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum, self.t_sum, self.fake_A_, self.fake_B_,
+                     self.g_loss],
                     feed_dict={self.real_data: batch_images, self.lr: lr, self.identity_lambda: identity_lambda,
                                self.D_lambda_var: D_lambda})
 
@@ -214,7 +204,7 @@ class cyclegan(object):
                     print(np.max([np.max(x) for x in tvars_vals]))
                     print(np.min([np.min(x) for x in tvars_vals]))
                     if np.mod(counter, 200) == 0:
-                        self.write_debugger(batch_images[:,:,:,:3], fake_A_, batch_images[:,:,:,3:], fake_B_,
+                        self.write_debugger(batch_images[:, :, :, :3], fake_A_, batch_images[:, :, :, 3:], fake_B_,
                                             epoch, idx)
 
                 if np.mod(counter, 200) == 0:
@@ -239,7 +229,6 @@ class cyclegan(object):
                     print(np.min([np.min(x) for x in tvars_vals]))
                 self.writer.add_summary(summary_str, counter)
 
-
                 if np.mod(counter, 200) == 0:
                     print("Epoch: [{}] [{}/{}] time: {:4.4f}".format(epoch, idx, self.batch_size,
                                                                      time.time() - start_time))
@@ -247,23 +236,21 @@ class cyclegan(object):
                     print("writing samples")
                     self.sample_model(epoch, idx, batch_images)
 
-
                 if np.mod(counter, 50) == 0:
                     self.save(counter)
                 counter += 1
             target_generator.wait()
-            source_generator.wait()  # TMA-CHANGE
+            source_generator.wait()
             target_generator.transfer()
-            source_generator.transfer()  # TMA-CHANGE
-
+            source_generator.transfer()
 
     def get_data_generators(self):
-        target_generator = patch_gen.get_generator_from_config(config_path=self.param_file_path,
-                                                               data_config_path=self.data_file_path,
-                                                               generator_key='target')
-        source_generator = patch_gen.get_generator_from_config(config_path=self.param_file_path,
-                                                               data_config_path=self.data_file_path,
-                                                               generator_key='source')
+        target_generator = get_generator_from_config(config_path=self.param_file_path,
+                                                     data_config_path=self.data_file_path,
+                                                     generator_key='target')
+        source_generator = get_generator_from_config(config_path=self.param_file_path,
+                                                     data_config_path=self.data_file_path,
+                                                     generator_key='source')
 
         print("starting")
         target_generator.start()
@@ -352,7 +339,7 @@ class cyclegan(object):
         B_diff = (np.abs(B - fake_B_) / 2)
         A_diff *= (A_diff > np.percentile(A_diff, q=90))
         B_diff *= (B_diff > np.percentile(B_diff, q=90))
-        save_images(A_diff  - 0.5, [self.mini_batch_size, 1],
+        save_images(A_diff - 0.5, [self.mini_batch_size, 1],
                     '{}/A_{:d}_{:d}_diff.jpg'.format(self.sample_dir, epoch, idx), 0.5)
-        save_images(B_diff  - 0.5, [self.mini_batch_size, 1],
+        save_images(B_diff - 0.5, [self.mini_batch_size, 1],
                     '{}/B_{:d}_{:d}_diff.jpg'.format(self.sample_dir, epoch, idx), 0.5)

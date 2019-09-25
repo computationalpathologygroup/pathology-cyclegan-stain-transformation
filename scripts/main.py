@@ -11,12 +11,15 @@ def collect_arguments():
     parser.add_argument('--output_dir', dest='output_dir', default=None, help='models are saved here')
     parser.add_argument('--param_file_path', dest='param_file_path', default=None, help='set the parameters file path')
     parser.add_argument('--data_file_path', dest='data_file_path', default=None, help='set the data file path')
+    parser.add_argument('--gpu', dest='gpu', default="0", type=str, help='set the gpu, only used on machine with multiple gpus')
     parser.add_argument('--debug_data', action='store_true', default=False, help='')
     args = parser.parse_args()
     return args
 
 def main(_):
     args = vars(collect_arguments())
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args['gpu']
     if not os.path.exists(os.path.join(args['output_dir'], 'logs')):
         os.makedirs(os.path.join(args['output_dir'], 'logs'))
     if not os.path.exists(os.path.join(args['output_dir'], 'samples')):
@@ -26,7 +29,7 @@ def main(_):
     tfconfig = tf.ConfigProto(allow_soft_placement=True)
     tfconfig.gpu_options.allow_growth = True
     with tf.Session(config=tfconfig) as sess:
-        model = cyclegan(sess, args)
-        model.train(args['continue_train'])
+        m = cyclegan(sess, args)
+        m.train(args['continue_train'])
 if __name__ == '__main__':
     tf.app.run()
