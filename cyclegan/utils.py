@@ -164,7 +164,7 @@ def _constructgenerator(data_source, adapter, data_config, system_config, traini
 
 def _constructdataadapter(data_config, augmentation_config, generator_key):
     data_adapter_builder = BatchAdapterBuilder()
-    data_adapter_builder.setaugmenters(config=augmentation_config.get('training'))
+    data_adapter_builder.setaugmenters(config=augmentation_config.get(generator_key))
 
     label_config = {key: data_config['labels'][key] for key in data_config['labels'] if
                     key not in ('training', 'validation')}
