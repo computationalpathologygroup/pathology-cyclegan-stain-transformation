@@ -231,9 +231,9 @@ class cyclegan(object):
 
                 if np.mod(counter, 200) == 0:
                     print("Epoch: [{}] [{}/{}] time: {:4.4f}".format(epoch, idx, self.batch_size,
-                                                                     time.time() - start_time))
+                                                                     time.time() - start_time), flush=True)
                 if np.mod(counter, 200) == 0:
-                    print("writing samples")
+                    print("writing samples", flush=True)
                     self.sample_model(epoch, idx, batch_images)
 
                 if np.mod(counter, 50) == 0:
