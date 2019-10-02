@@ -60,10 +60,11 @@ class cyclegan(object):
         self.output_c_dim = model_params['output_c_dim']
         self.normalization = model_params['normalization']
         self._disc_standalone_epochs = training_params['disc_standalone_epochs']
+        
 
         OPTIONS = namedtuple('OPTIONS',
-                             'use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
-        self.options = OPTIONS._make((model_params['use_maxpool'], model_params['ngf'], model_params['ndf'],
+                             'residualgan use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
+        self.options = OPTIONS._make((model_params['residualgan'], model_params['use_maxpool'], model_params['ngf'], model_params['ndf'],
                                       self.output_c_dim, model_params['unet_depth'], model_params['padding'],
                                       model_params['unet_residual'], model_params['regularization']))
 
@@ -171,9 +172,7 @@ class cyclegan(object):
             else:
                 print(" [!] Load failed...")
 
-        # init data generators
         source_generator, target_generator = self.get_data_generators()
-
         progress_size = min(8, self.batch_size)
         self.progress_images_source, _ = source_generator.batch(progress_size)
         self.progress_images_target, _ = target_generator.batch(progress_size)
@@ -187,7 +186,7 @@ class cyclegan(object):
             print(identity_lambda)
             D_lambda = self.D_lambda
             target_generator.load()
-            source_generator.load()  # TMA-CHANGE
+            source_generator.load()
 
             if not os.path.exists(self.sample_dir):
                 os.makedirs(self.sample_dir)
@@ -311,8 +310,9 @@ class cyclegan(object):
             return False
 
     def sample_progress_images(self, counter):
-        for idx in range(0, self.batch_size, self.mini_batch_size):
-            batch_images = np.concatenate((self.progress_images_source[self.spacing]['patches'][idx:idx + self.mini_batch_size],  # TMA-CHANGE
+        print("sampling progress images..")
+        for idx in range(0, self.progress_images_source[self.spacing]['patches'].shape[0], self.mini_batch_size):
+            batch_images = np.concatenate((self.progress_images_source[self.spacing]['patches'][idx:idx + self.mini_batch_size],
                                            self.progress_images_target[self.spacing]['patches'][idx:idx + self.mini_batch_size]), axis = 3)
             fake_A, fake_B, fake_A_, fake_B_ = self.sess.run(
                 [self.fake_A, self.fake_B, self.fake_A_, self.fake_B_],

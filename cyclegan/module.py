@@ -106,7 +106,10 @@ def generator_unet(image, options, reuse=False, name="generator"):
             assert tf.get_variable_scope().reuse is False
         net = unet_block(image, 0, options)
         output = conv2d(net, options.output_c_dim, ks=1, s=1, padding='VALID', name='g_conv_final')
-        return 2 * tf.nn.tanh(output) + image
+        if options.residualgan:
+            return 2 * tf.nn.tanh(output) + image
+        else:
+            return tf.nn.tanh(output)
 
 
 # def generator_resnet(image, options, reuse=False, name="generator"):

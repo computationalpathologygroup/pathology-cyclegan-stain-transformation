@@ -1,0 +1,126 @@
+model:
+    residualgan: true
+    input_c_dim: 3
+    output_c_dim: 3
+    unet_depth: 3
+    unet_residual: false
+    use_maxpool: false
+    ngf: 32
+    ndf: 32
+    padding: 'REFLECT'
+    normalization: 1.0
+    regularization: 0.0
+    
+
+system:
+    source:
+        process count: 0
+        sampler count: 5
+    target:
+        process count: 0
+        sampler count: 5
+    multi-threaded: true
+    ipc chunk size: 20          
+    join timeout secs: 2000        
+    response timeout secs: 2000   
+    poll timeout secs: 2000 
+
+training:
+    disc_standalone_epochs: 1
+    learning_rate: 0.0001
+    spacing: 0.25
+    epoch count: 800    
+    decay_epoch: 200
+    beta1: 0.5
+    L1_lambda: 5.0
+    l2_lambda: 0.0
+    id_lambda: 3.0
+    D_lambda: 3.0
+    use_logloss: false
+    mini_batch_size: 4
+    iterations:
+        source:
+            repetition count: 1
+            iteration count: 1
+            batch size: 200
+        target:
+            repetition count: 1
+            iteration count: 1
+            batch size: 200
+    buffer chunk size: 1000
+
+data:
+    images:
+        patch shapes:
+            0.25: [256, 256]
+        channels: [0, 1, 2]
+    labels:
+        label mode: 'load'
+        source:
+            mask pixel spacing: 2.0
+            label map:
+                1: 0
+                2: 0
+            label ratios:
+                1: 0.05
+                2: 0.95
+            strict selection: true
+        target:
+            mask pixel spacing: 2.0
+            label map:
+                1: 0
+                2: 0
+            label ratios:
+                1: 0.05
+                2: 0.95
+            strict selection: true
+        one hot: true
+        early: true
+    spacing tolerance: 0.5
+    range normalization:
+        enabled: true
+        early: true
+        type: 'rgb'
+        target range: [-1.0, 1.0]
+    weight mapping:
+        enabled: false
+        early: true
+        type: 'balancing'
+        normalize: false
+        clipping:
+            min: 0.1
+            max: 1.0
+    categories:
+        default: 1.0
+    purposes:
+        source: 0.5
+        target: 0.5
+    resources:
+        processes:
+            source: 0.5
+            target: 0.5
+        samplers:
+            source: 0.5
+            target: 0.5
+
+augmentation:
+    source:
+        - group: 'spatial'
+          random: true
+          items:
+              - type: 'flip'
+                probability: 0.5
+                flips: ['none', 'horizontal']
+              - type: 'rotate_90'
+                probability: 0.6
+                rotations: [0, 1, 2, 3]
+    target:
+        - group: 'spatial'
+          random: true
+          items:
+              - type: 'flip'
+                probability: 0.5
+                flips: ['none', 'horizontal']
+              - type: 'rotate_90'
+                probability: 0.6
+                rotations: [0, 1, 2, 3]     
