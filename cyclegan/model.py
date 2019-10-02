@@ -67,6 +67,9 @@ class cyclegan(object):
                                       self.output_c_dim, model_params['unet_depth'], model_params['padding'],
                                       model_params['unet_residual'], model_params['regularization']))
 
+        self.copy_config()
+
+
     def _build_model(self):
         self.real_data = tf.placeholder(tf.float32,
                                         [None, None, None, self.input_c_dim + self.output_c_dim],
@@ -101,7 +104,6 @@ class cyclegan(object):
             self.g_loss += self.identity_lambda * self.criterion_cycle(self.real_A, self.fake_B, self.options.padding) \
                            + self.identity_lambda * self.criterion_cycle(self.real_B, self.fake_A, self.options.padding)
 
-        # + self.l2_lambda * tf.nn.l2_loss(self.g_vars)
         self.fake_A_sample = tf.placeholder(tf.float32, [None, None, None, self.input_c_dim], name='fake_A_sample')
         self.fake_B_sample = tf.placeholder(tf.float32, [None, None, None, self.output_c_dim], name='fake_B_sample')
 
@@ -116,7 +118,7 @@ class cyclegan(object):
         self.da_loss_real = self.criterionGAN(self.DA_real, True)
         self.da_loss_fake = self.criterionGAN(self.DA_fake_sample, False)
         self.da_loss = (self.da_loss_real + self.da_loss_fake) / 2
-        self.d_loss = self.da_loss + self.db_loss  # + self.l2_lambda * tf.nn.l2_loss(self.d_vars)
+        self.d_loss = self.da_loss + self.db_loss
 
         self.t_sum = tf.summary.merge_all()
         self.g_loss_a2a_sum = tf.summary.scalar("g_loss_a2a", self.g_loss_a2a)
@@ -154,14 +156,15 @@ class cyclegan(object):
         self.g_optim = tf.train.AdamOptimizer(self.lr, beta1=self.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
 
+
         tvars = tf.trainable_variables()
         init_op = tf.global_variables_initializer()
+
         self.sess.run(init_op)
         self.writer = tf.summary.FileWriter(os.path.join(self.output_dir, 'logs', self.run_name), self.sess.graph)
 
         counter = 0
         start_time = time.time()
-
         if continue_train:
             if self.load():
                 print(" [*] Load SUCCESS")
@@ -169,11 +172,11 @@ class cyclegan(object):
                 print(" [!] Load failed...")
 
         # init data generators
-        config_dir = os.path.join(self.output_dir, 'config', self.run_name)
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
-        shutil.copy(self.param_file_path, config_dir)
         source_generator, target_generator = self.get_data_generators()
+
+        progress_size = min(8, self.batch_size)
+        self.progress_images_source, _ = source_generator.batch(progress_size)
+        self.progress_images_target, _ = target_generator.batch(progress_size)
 
         for epoch in range(self.epochs):
             dataA, _ = source_generator.batch(self.batch_size)
@@ -185,6 +188,9 @@ class cyclegan(object):
             D_lambda = self.D_lambda
             target_generator.load()
             source_generator.load()  # TMA-CHANGE
+
+            if not os.path.exists(self.sample_dir):
+                os.makedirs(self.sample_dir)
 
             for idx in range(0, self.batch_size, self.mini_batch_size):
                 batch_images = np.concatenate(
@@ -198,12 +204,12 @@ class cyclegan(object):
                                self.D_lambda_var: D_lambda})
 
                 if self.debug_data:
-                    print("gen:")
-                    tvars_vals = self.sess.run(tvars)
-                    print(g_loss)
-                    print(np.max([np.max(x) for x in tvars_vals]))
-                    print(np.min([np.min(x) for x in tvars_vals]))
                     if np.mod(counter, 200) == 0:
+                        print("gen:")
+                        tvars_vals = self.sess.run(tvars)
+                        print(g_loss)
+                        print(np.max([np.max(x) for x in tvars_vals]))
+                        print(np.min([np.min(x) for x in tvars_vals]))
                         self.write_debugger(batch_images[:, :, :, :3], fake_A_, batch_images[:, :, :, 3:], fake_B_,
                                             epoch, idx)
 
@@ -222,18 +228,21 @@ class cyclegan(object):
                                self.fake_B_sample: fake_B,
                                self.lr: lr})
                 if self.debug_data:
-                    print("disc:")
-                    print(d_loss)
-                    tvars_vals = self.sess.run(tvars)
-                    print(np.max([np.max(x) for x in tvars_vals]))
-                    print(np.min([np.min(x) for x in tvars_vals]))
+                    if np.mod(counter, 200) == 0:
+                        print("disc:")
+                        print(d_loss)
+                        tvars_vals = self.sess.run(tvars)
+                        print(np.max([np.max(x) for x in tvars_vals]))
+                        print(np.min([np.min(x) for x in tvars_vals]))
                 self.writer.add_summary(summary_str, counter)
+
+
 
                 if np.mod(counter, 200) == 0:
                     print("Epoch: [{}] [{}/{}] time: {:4.4f}".format(epoch, idx, self.batch_size,
                                                                      time.time() - start_time))
-                if np.mod(counter, 200) == 0:
                     print("writing samples")
+                    self.sample_progress_images(counter)
                     self.sample_model(epoch, idx, batch_images)
 
                 if np.mod(counter, 50) == 0:
@@ -243,6 +252,14 @@ class cyclegan(object):
             source_generator.wait()
             target_generator.transfer()
             source_generator.transfer()
+
+    def copy_config(self):
+        config_dir = os.path.join(self.output_dir, 'config', self.run_name)
+        print("creating config dir {}..".format(config_dir))
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+        if not os.path.exists(self.param_file_path):
+            shutil.copy(self.param_file_path, config_dir)
 
     def get_data_generators(self):
         target_generator = get_generator_from_config(config_path=self.param_file_path,
@@ -293,9 +310,25 @@ class cyclegan(object):
         else:
             return False
 
+    def sample_progress_images(self, counter):
+        for idx in range(0, self.batch_size, self.mini_batch_size):
+            batch_images = np.concatenate((self.progress_images_source[self.spacing]['patches'][idx:idx + self.mini_batch_size],  # TMA-CHANGE
+                                           self.progress_images_target[self.spacing]['patches'][idx:idx + self.mini_batch_size]), axis = 3)
+            fake_A, fake_B, fake_A_, fake_B_ = self.sess.run(
+                [self.fake_A, self.fake_B, self.fake_A_, self.fake_B_],
+                feed_dict={self.real_data: batch_images}
+            )
+            fake_A = np.concatenate([*fake_A], axis=0)[None]
+            fake_B = np.concatenate([*fake_B], axis=0)[None]
+            fake_A_ = np.concatenate([*fake_A_], axis=0)[None]
+            fake_B_ = np.concatenate([*fake_B_], axis=0)[None]
+
+            imgs_source = np.concatenate([np.concatenate([*batch_images[:,:,:,:3]],axis=0)[None], fake_B, fake_A_], axis=2)
+            imgs_target = np.concatenate([np.concatenate([*batch_images[:,:,:,3:]],axis=0)[None], fake_A, fake_B_], axis=2)
+            save_images(imgs_source, [1, 1], '{}/progress_image_source_{}_{}.jpg'.format(self.sample_dir, idx, counter), self.normalization)
+            save_images(imgs_target, [1, 1], '{}/progress_image_target_{}_{}.jpg'.format(self.sample_dir, idx, counter), self.normalization)
+
     def sample_model(self, epoch, idx, sample_images):
-        if not os.path.exists(self.sample_dir):
-            os.makedirs(self.sample_dir)
         fake_A, fake_B, fake_A_, fake_B_ = self.sess.run(
             [self.fake_A, self.fake_B, self.fake_A_, self.fake_B_],
             feed_dict={self.real_data: sample_images}
