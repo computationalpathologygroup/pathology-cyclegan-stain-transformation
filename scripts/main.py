@@ -12,6 +12,7 @@ def collect_arguments():
     parser.add_argument('--param_file_path', dest='param_file_path', default=None, help='set the parameters file path')
     parser.add_argument('--data_file_path', dest='data_file_path', default=None, help='set the data file path')
     parser.add_argument('--gpu', dest='gpu', default="0", type=str, help='set the gpu, only used on machine with multiple gpus')
+    parser.add_argument('--network', dest='network', default='unet', type=str, help='choose unet or resnet architecture')
     parser.add_argument('--debug_data', action='store_true', default=False, help='')
     args = parser.parse_args()
     return args
@@ -31,5 +32,7 @@ def main(_):
     with tf.Session(config=tfconfig) as sess:
         m = cyclegan(sess, args)
         m.train(args['continue_train'])
+
+
 if __name__ == '__main__':
     tf.app.run()

@@ -17,35 +17,7 @@ try:
 except AttributeError:
     from imageio import imread as _imread
 
-pp = pprint.PrettyPrinter()
-
 get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
-
-# -----------------------------
-# new added functions for cyclegan
-class ImagePool(object):
-    def __init__(self, maxsize=50):
-        self.maxsize = maxsize
-        self.num_img = 0
-        self.images = []
-
-    def __call__(self, image):
-        if self.maxsize <= 0:
-            return image
-        if self.num_img < self.maxsize:
-            self.images.append(image)
-            self.num_img += 1
-            return image
-        if np.random.rand() > 0.5:
-            idx = int(np.random.rand()*self.maxsize)
-            tmp1 = copy.copy(self.images[idx])[0]
-            self.images[idx][0] = image[0]
-            idx = int(np.random.rand()*self.maxsize)
-            tmp2 = copy.copy(self.images[idx])[1]
-            self.images[idx][1] = image[1]
-            return [tmp1, tmp2]
-        else:
-            return image
 
 def load_test_data(image_path, fine_size=256):
     img = imread(image_path)
