@@ -17,49 +17,8 @@ try:
 except AttributeError:
     from imageio import imread as _imread
 
-get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
-
-def load_test_data(image_path, fine_size=256):
-    img = imread(image_path)
-    img = scipy.misc.imresize(img, [fine_size, fine_size])
-    img = img/127.5 - 1
-    return img
-
-def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
-    img_A = imread(image_path[0])
-    img_B = imread(image_path[1])
-    if not is_testing:
-        img_A = scipy.misc.imresize(img_A, [load_size, load_size])
-        img_B = scipy.misc.imresize(img_B, [load_size, load_size])
-        h1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
-        w1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
-        img_A = img_A[h1:h1+fine_size, w1:w1+fine_size]
-        img_B = img_B[h1:h1+fine_size, w1:w1+fine_size]
-
-        if np.random.random() > 0.5:
-            img_A = np.fliplr(img_A)
-            img_B = np.fliplr(img_B)
-    else:
-        img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
-        img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
-
-    img_A = img_A/127.5 - 1.
-    img_B = img_B/127.5 - 1.
-
-    img_AB = np.concatenate((img_A, img_B), axis=2)
-    # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
-    return img_AB
-
-# -----------------------------
-
 def save_images(images, size, image_path, normalization):
     return imsave(images, size, image_path, normalization)
-
-def imread(path, is_grayscale = False):
-    if (is_grayscale):
-        return _imread(path, flatten=True).astype(np.float)
-    else:
-        return _imread(path, mode='RGB').astype(np.float)
 
 def merge(images, size):
     h, w = images.shape[1], images.shape[2]
@@ -77,24 +36,6 @@ def imsave(images, size, path, normalization):
     clipped_img = rescaled_img.clip(0, 255).astype(np.uint8)
     pil_img = Image.fromarray(clipped_img)
     pil_img.save(path)
-
-def center_crop(x, crop_h, crop_w,
-                resize_h=64, resize_w=64):
-  if crop_w is None:
-    crop_w = crop_h
-  h, w = x.shape[:2]
-  j = int(round((h - crop_h)/2.))
-  i = int(round((w - crop_w)/2.))
-  return scipy.misc.imresize(
-      x[j:j+crop_h, i:i+crop_w], [resize_h, resize_w])
-
-def crop_center(image, shape):
-    img_shape = image.shape
-    crop = [(img_shape[1] - shape[1]) // 2, (img_shape[2] - shape[2]) // 2]
-    if crop[0] > 0:
-        return image[:,crop[0]:-crop[0],crop[1]:-crop[1],:]
-    else:
-        return image
 
 def get_config_from_yaml(config_path):
     with open(file=config_path, mode='r') as param_file:

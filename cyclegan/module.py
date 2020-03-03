@@ -3,73 +3,71 @@ import tensorflow as tf
 from .ops import *
 from .utils import *
 
-# def discriminator(image, options, reuse=False, name="discriminator"):
-#     with tf.variable_scope(name):
-#         # image is 256 x 256 x input_c_dim
-#         if reuse:
-#             tf.get_variable_scope().reuse_variables()
-#         else:
-#             assert tf.get_variable_scope().reuse is False
-#
-#         h0 = lrelu(conv2d(image, options.df_dim, name='d_h0_conv'))
-#         # h0 is (128 x 128 x self.df_dim)
-#         h1 = lrelu(instance_norm(conv2d(h0, options.df_dim * 2, name='d_h1_conv'), 'd_bn1'))
-#         # h1 is (64 x 64 x self.df_dim*2)
-#         h2 = lrelu(instance_norm(conv2d(h1, options.df_dim * 4, name='d_h2_conv'), 'd_bn2'))
-#         # h2 is (32x 32 x self.df_dim*4)
-#         h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 8, s=1, name='d_h3_conv'), 'd_bn3'))
-#         # h3 is (32 x 32 x self.df_dim*8)
-#         h4 = conv2d(h3, 1, s=1, name='d_h3_pred')
-#         # h4 is (32 x 32 x 1)
-#         return h4
 
 def discriminator(image, options, reuse=False, name="discriminator"):
     with tf.variable_scope(name):
-        # image is 256 x 256 x input_c_dim
         if reuse:
             tf.get_variable_scope().reuse_variables()
         else:
             assert tf.get_variable_scope().reuse is False
 
-        h0_0 = lrelu(instance_norm(conv2d(image, options.df_dim, s=1, name='d_h0'), 'd_bn0'))
-        h0_1 = conv2d(h0_0, 1, s=1, name='d_h0_pred')
         h0 = lrelu(conv2d(image, options.df_dim, name='d_h0_conv'))
-        # h0 is (128 x 128 x self.df_dim)
         h1 = lrelu(instance_norm(conv2d(h0, options.df_dim * 2, name='d_h1_conv', stddev=0.02), 'd_bn1'))
-        # h1 is (64 x 64 x self.df_dim*2)
         h2 = lrelu(instance_norm(conv2d(h1, options.df_dim * 4, name='d_h2_conv', stddev=0.02), 'd_bn2'))
-        # h2 is (32x 32 x self.df_dim*4)
-        h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv', stddev=0.02), 'd_bn3'))
+        h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv', s=1, stddev=0.02), 'd_bn3'))
         # h2 is (16x 16 x self.df_dim*4)
-        h4 = conv2d(h3, 1, s=1, name='d_h3_pred')
+        h4_output = conv2d(h3, 1, s=1, name='d_h4_pred')
+        h5 = lrelu(instance_norm(conv2d(h3, options.df_dim * 4, name='d_h5_conv', stddev=0.02), 'd_bn5'))
+        h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, s=1, name='d_h6_conv', stddev=0.02), 'd_bn6'))
+        h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
 
-        # h5 = lrelu(instance_norm(conv2d(h3, options.df_dim * 4, name='d_h5_conv', stddev=0.02), 'd_bn4'))
-        # h6 = conv2d(h5, 1, s=1, name='d_h5_pred')
-
-        return h0_1, h4
+        return h4_output, h7_output
+#
+# def conv_block(_input, level, filters, padding, residual=False, regularization=0.0, up=False):
+#     name1 = 'g_d{}_conv1'.format(level)
+#     name2 = 'g_d{}_conv2'.format(level)
+#     net = lrelu(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
+#                                      reg=regularization), leak=0.0)
+#     net = instance_norm(net, name='g_d{}_in1'.format(level))
+#     tf.summary.histogram("conv1_{}".format(level), net)
+#     if residual and level > 0:
+#         net = instance_norm(lrelu(conv2d(net,
+#                                          output_dim=_input.shape[3].value,
+#                                          ks=3,
+#                                          s=1,
+#                                          padding=padding,
+#                                          name='g_d{}_res'.format(level),
+#                                          reg=regularization), leak=0.0),
+#                             name='g_d{}_in2'.format(level))
+#         net = _input + net
+#     else:
+#         net = lrelu(conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2, reg=regularization),
+#                     leak=0.0)
+#         if not up:
+#             net = instance_norm(net, name='g_d{}_in2'.format(level))
+#         tf.summary.histogram("conv2_{}".format(level), net)
+#     return net
 
 def conv_block(_input, level, filters, padding, residual=False, regularization=0.0, up=False):
     name1 = 'g_d{}_conv1'.format(level)
     name2 = 'g_d{}_conv2'.format(level)
-    net = lrelu(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
-                                     reg=regularization), leak=0.0)
-    net = instance_norm(net, name='g_d{}_in1'.format(level))
+    net = lrelu(instance_norm(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
+                                     reg=regularization), name='g_d{}_in1'.format(level)))
     tf.summary.histogram("conv1_{}".format(level), net)
     if residual and level > 0:
-        net = instance_norm(lrelu(conv2d(net,
+        net = lrelu(instance_norm(conv2d(net,
                                          output_dim=_input.shape[3].value,
                                          ks=3,
                                          s=1,
                                          padding=padding,
                                          name='g_d{}_res'.format(level),
-                                         reg=regularization), leak=0.0),
-                            name='g_d{}_in2'.format(level))
+                                         reg=regularization), name='g_d{}_in2'.format(level)))
         net = _input + net
     else:
-        net = lrelu(conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2, reg=regularization),
-                    leak=0.0)
+        net = conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2, reg=regularization)
         if not up:
             net = instance_norm(net, name='g_d{}_in2'.format(level))
+        net = lrelu(net)
         tf.summary.histogram("conv2_{}".format(level), net)
     return net
 
@@ -167,9 +165,10 @@ def abs_loss(in_, target, padding="SAME"):
 
 def mae_loss(in_, target):
     if target:
-        return tf.reduce_mean((in_[1] - tf.ones_like(in_[1])) ** 2) # + tf.reduce_mean((in_[0] - tf.ones_like(in_[0])) ** 2)
+        print(len(in_))
+        return tf.reduce_mean((in_[1] - tf.ones_like(in_[1])) ** 2) + tf.reduce_mean((in_[0] - tf.ones_like(in_[0])) ** 2)
     else:
-        return tf.reduce_mean((in_[1] - tf.zeros_like(in_[1])) ** 2) # + tf.reduce_mean((in_[0] - tf.zeros_like(in_[0])) ** 2)
+        return tf.reduce_mean((in_[1] - tf.zeros_like(in_[1])) ** 2) + tf.reduce_mean((in_[0] - tf.zeros_like(in_[0])) ** 2)
 
 
 def ssim_loss(in_,target):

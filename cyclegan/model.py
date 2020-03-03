@@ -190,11 +190,11 @@ class cyclegan(object):
             source_generator.load()
             lr = self.learning_rate * 0.5 ** (epoch // self.lr_decay_epoch)
             identity_lambda = float(max(self.id_lambda - epoch * 0.25 * self.id_lambda, 0))
-
+            print("lr: {}".format(lr))
             for idx in range(0, self.batch_size, self.mini_batch_size):
-                batch_images = np.concatenate(
-                    (dataA[self.spacing]['patches'][idx:idx + self.mini_batch_size],  # TMA-CHANGE
-                     dataB[self.spacing]['patches'][idx:idx + self.mini_batch_size]), axis=3)
+                batch_images = np.concatenate((dataA[self.spacing]['patches'][idx:idx + self.mini_batch_size],
+                                               dataB[self.spacing]['patches'][idx:idx + self.mini_batch_size]),
+                                              axis=3)
 
                 fake_A, fake_B = self._gen_iteration(D_lambda, batch_images, counter, epoch, identity_lambda, idx, lr)
                 self._disc_iteration(batch_images, counter, fake_A, fake_B, lr)
