@@ -61,10 +61,10 @@ class cyclegan(object):
             self.criterion_cycle = abs_loss
 
         OPTIONS = namedtuple('OPTIONS',
-                             'residualgan use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization')
+                             'residualgan use_maxpool gf_dim df_dim output_c_dim unet_depth padding unet_residual regularization spectral')
         self.options = OPTIONS._make((model_params['residualgan'], model_params['use_maxpool'], model_params['ngf'], model_params['ndf'],
                                       self.output_c_dim, model_params['unet_depth'], model_params['padding'],
-                                      model_params['unet_residual'], model_params['regularization']))
+                                      model_params['unet_residual'], model_params['regularization'], model_params['spectral']))
 
 
 
@@ -96,11 +96,10 @@ class cyclegan(object):
         self.g_disc_loss = self.D_lambda_var * self.criterionGAN(self.DA_fake, True) \
                            + self.D_lambda_var * self.criterionGAN(self.DB_fake, True)
 
-        self.g_loss = self.D_lambda_var * self.criterionGAN(self.DA_fake, True) \
-                      + self.D_lambda_var * self.criterionGAN(self.DB_fake, True) \
+        self.g_loss = self.D_lambda_var * self.criterionGAN(self.DA_fake, True, q=0.5) \
+                      + self.D_lambda_var * self.criterionGAN(self.DB_fake, True, q=0.5) \
                       + self.L1_lambda * self.criterion_cycle(self.real_A, self.fake_A_, self.options.padding) \
-                      + self.L1_lambda * self.criterion_cycle(self.real_B, self.fake_B_, self.options.padding) \
-                      + self.g_ssim_a + self.g_ssim_b
+                      + self.L1_lambda * self.criterion_cycle(self.real_B, self.fake_B_, self.options.padding)
 
         if self.id_lambda > 0.0:
             self.g_loss += self.identity_lambda * self.criterion_cycle(self.real_A, self.fake_B, self.options.padding) \

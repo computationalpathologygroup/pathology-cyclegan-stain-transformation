@@ -4,7 +4,7 @@ from tensorflow.python.ops.image_ops_impl import ResizeMethod
 from .utils import *
 
 def batch_norm(x, name="batch_norm"):
-    return tf.contrib.layers.batch_norm(x, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, scope=name)
+    return tf.contrib.layers.batch_norm(x, decay=0.9, updates_collections=None, epsilon=1e-6, scale=True, scope=name)
 
 def instance_norm(input, name="instance_norm", epsilon=1e-5):
     with tf.variable_scope(name):
@@ -15,7 +15,38 @@ def instance_norm(input, name="instance_norm", epsilon=1e-5):
         normalized = (input-mean) / ((variance + epsilon) ** 0.5)
         return scale*normalized + offset
 
-def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="conv2d", reg=0.0):
+def spectral_norm(w, iteration=1):
+   w_shape = w.shape.as_list()
+   w = tf.reshape(w, [-1, w_shape[-1]])
+
+   u = tf.get_variable("u", [1, w_shape[-1]], initializer=tf.random_normal_initializer(0.05), trainable=False)
+
+   u_hat = u
+   v_hat = None
+   for i in range(iteration):
+       """
+       power iteration
+       Usually iteration = 1 will be enough
+       """
+       v_ = tf.matmul(u_hat, tf.transpose(w))
+       v_hat = tf.nn.l2_normalize(v_)
+
+       u_ = tf.matmul(v_hat, w)
+       u_hat = tf.nn.l2_normalize(u_)
+
+   u_hat = tf.stop_gradient(u_hat)
+   v_hat = tf.stop_gradient(v_hat)
+
+   sigma = tf.matmul(tf.matmul(v_hat, w), tf.transpose(u_hat))
+
+   with tf.control_dependencies([u.assign(u_hat)]):
+       w_norm = w / sigma
+       w_norm = tf.reshape(w_norm, w_shape)
+
+
+   return w_norm
+
+def conv2d(input_, output_dim, ks=4, s=2, spec_norm=False, stddev=0.01, padding='SAME', name="conv2d", reg=0.01):
     if padding == "REFLECT":
         x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
         p = "VALID"
@@ -23,22 +54,38 @@ def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="con
         x = input_
         p = padding
     with tf.variable_scope(name):
-        y = tf.layers.conv2d(inputs=x,
-                             filters=output_dim,
-                             kernel_size=ks,
-                             strides=s,
-                             padding=p,
-                             use_bias=False,
-                             kernel_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                             kernel_regularizer=tf.keras.regularizers.l2(reg))
+        w = tf.get_variable("kernel", shape=[ks, ks, input_.get_shape()[-1], output_dim],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        if spec_norm:
+            y = tf.nn.conv2d(input=x, filter=spectral_norm(w), strides=[1, s, s, 1], padding=p, name=name)
+        else:
+            y = tf.nn.conv2d(input=x, filter=w, strides=[1, s, s, 1], padding=p, name=name)
+
         return y
+
+# def conv2d(input_, output_dim, ks=4, s=2, stddev=0.001, padding='SAME', name="conv2d", reg=0.01):
+#     if padding == "REFLECT":
+#         x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
+#         p = "VALID"
+#     else:
+#         x = input_
+#         p = padding
+#     with tf.variable_scope(name):
+#         y = tf.layers.conv2d(inputs=x,
+#                              filters=output_dim,
+#                              kernel_size=ks,
+#                              strides=s,
+#                              padding=p,
+#                              use_bias=False,
+#                              kernel_initializer=tf.truncated_normal_initializer(stddev=stddev))
+#         return y
 
 def maxpool(input, kernel_size=[2, 2], name="maxpool"):
     with tf.variable_scope(name):
         return tf.layers.max_pooling2d(input, pool_size=kernel_size, strides=2)
 
 
-def deconv2d(input_, output_dim, ks=4, s=2, stddev=0.001, name="deconv2d"):
+def deconv2d(input_, output_dim, ks=4, s=2, stddev=0.01, name="deconv2d"):
     with tf.variable_scope(name):
         return tf.layers.conv2d_transpose(input_, output_dim, ks, s, padding='SAME',
                                           kernel_initializer=tf.truncated_normal_initializer(stddev=stddev),

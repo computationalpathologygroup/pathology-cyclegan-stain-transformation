@@ -4,24 +4,52 @@ from .ops import *
 from .utils import *
 
 
+# def discriminator(image, options, reuse=False, name="discriminator"):
+#     with tf.variable_scope(name):
+#         if reuse:
+#             tf.get_variable_scope().reuse_variables()
+#         else:
+#             assert tf.get_variable_scope().reuse is False
+#
+#         h0 = lrelu(conv2d(image, options.df_dim, name='d_h0_conv'))
+#         h1 = lrelu(instance_norm(conv2d(h0, options.df_dim * 2, name='d_h1_conv', stddev=0.02), 'd_bn1'))
+#         h2 = lrelu(instance_norm(conv2d(h1, options.df_dim * 4, name='d_h2_conv', stddev=0.02), 'd_bn2'))
+#         h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv', s=1, stddev=0.02), 'd_bn3'))
+#         # h2 is (16x 16 x self.df_dim*4)
+#         h4_output = conv2d(h3, 1, s=1, name='d_h4_pred')
+#         h5 = lrelu(instance_norm(conv2d(h3, options.df_dim * 4, name='d_h5_conv', stddev=0.02), 'd_bn5'))
+#         h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, s=1, name='d_h6_conv', stddev=0.02), 'd_bn6'))
+#         h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
+#
+#         return h4_output, h7_output
+
 def discriminator(image, options, reuse=False, name="discriminator"):
     with tf.variable_scope(name):
+        # image is 256 x 256 x input_c_dim
         if reuse:
             tf.get_variable_scope().reuse_variables()
         else:
             assert tf.get_variable_scope().reuse is False
-
-        h0 = lrelu(conv2d(image, options.df_dim, name='d_h0_conv'))
-        h1 = lrelu(instance_norm(conv2d(h0, options.df_dim * 2, name='d_h1_conv', stddev=0.02), 'd_bn1'))
-        h2 = lrelu(instance_norm(conv2d(h1, options.df_dim * 4, name='d_h2_conv', stddev=0.02), 'd_bn2'))
-        h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv', s=1, stddev=0.02), 'd_bn3'))
-        # h2 is (16x 16 x self.df_dim*4)
-        h4_output = conv2d(h3, 1, s=1, name='d_h4_pred')
-        h5 = lrelu(instance_norm(conv2d(h3, options.df_dim * 4, name='d_h5_conv', stddev=0.02), 'd_bn5'))
-        h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, s=1, name='d_h6_conv', stddev=0.02), 'd_bn6'))
-        h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
-
-        return h4_output, h7_output
+        spec_n = options.spectral
+        h0 = lrelu(conv2d(image, options.df_dim, name='d_h0_conv', spec_norm=spec_n))
+        # h0 is (128 x 128 x self.df_dim)
+        h1 = lrelu(instance_norm(conv2d(h0, options.df_dim * 2, name='d_h1_conv', stddev=0.02, spec_norm=spec_n), 'd_bn1'))
+        # h1 is (64 x 64 x self.df_dim*2)
+        h2 = lrelu(instance_norm(conv2d(h1, options.df_dim * 4, name='d_h2_conv', stddev=0.02, spec_norm=spec_n), 'd_bn2'))
+        # h2 is (32x 32 x self.df_dim*4)
+        h3 = lrelu(instance_norm(conv2d(h2, options.df_dim * 4, name='d_h3_conv', stddev=0.02, spec_norm=spec_n), 'd_bn3'))
+        # h2 is (32 x 32 x self.df_dim*4)
+        h3_pred = conv2d(h3, 1, s=1, name='d_h3_pred', stddev=0.02, spec_norm=spec_n)
+        # h4_1 = lrelu(instance_norm(conv2d(h4, options.df_dim * 8, 3, s=1, name='d_h41_conv'), 'd_bn41'))
+        # h4_output = conv2d(h4_1, 1, s=1, name='d_h4_pred')
+        # h2 is (8x 8 x self.df_dim*4)
+        # h5 = lrelu(instance_norm(conv2d(h4, options.df_dim * 4, name='d_h5_conv'), 'd_bn5'))
+        # h2 is (4x 4 x self.df_dim*4)
+        # h6 = lrelu(instance_norm(conv2d(h5, options.df_dim * 8, 3, s=1, name='d_h6_conv'), 'd_bn6'))
+        # h3 is (4 x 4 x self.df_dim*8)
+        # h7_output = conv2d(h6, 1, s=1, name='d_h7_pred')
+        # h4 is (4 x 4 x 1)
+        return h3_pred
 #
 # def conv_block(_input, level, filters, padding, residual=False, regularization=0.0, up=False):
 #     name1 = 'g_d{}_conv1'.format(level)
@@ -51,8 +79,9 @@ def discriminator(image, options, reuse=False, name="discriminator"):
 def conv_block(_input, level, filters, padding, residual=False, regularization=0.0, up=False):
     name1 = 'g_d{}_conv1'.format(level)
     name2 = 'g_d{}_conv2'.format(level)
-    net = lrelu(instance_norm(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
-                                     reg=regularization), name='g_d{}_in1'.format(level)))
+    net = lrelu(conv2d(_input, output_dim=filters, ks=3, s=1, padding=padding, name=name1,
+                                     reg=regularization))
+    net = instance_norm(net, name='g_d{}_in1'.format(level))
     tf.summary.histogram("conv1_{}".format(level), net)
     if residual and level > 0:
         net = lrelu(instance_norm(conv2d(net,
@@ -65,9 +94,9 @@ def conv_block(_input, level, filters, padding, residual=False, regularization=0
         net = _input + net
     else:
         net = conv2d(net, output_dim=filters, ks=3, s=1, padding=padding, name=name2, reg=regularization)
+        net = lrelu(net)
         if not up:
             net = instance_norm(net, name='g_d{}_in2'.format(level))
-        net = lrelu(net)
         tf.summary.histogram("conv2_{}".format(level), net)
     return net
 
@@ -85,10 +114,9 @@ def unet_block(_input, level, options):
         net = unet_block(net, level + 1, options)
         net = upsample2d(net, name='g_d{}_upsample2d'.format(level))
         net = tf.concat([down_block, net], 3)
-        # net = tf.concat([down_block, instance_norm(net, name='g_d{}_deconv_bn'.format(level))], 3)
         with tf.variable_scope("up"):
             net = conv_block(net, level, filters=filters, padding=options.padding, residual=options.unet_residual,
-                             regularization=options.regularization, up=options.residualgan)
+                             regularization=options.regularization, up=True)
     else:
         net = conv_block(_input, level, filters=filters, padding=options.padding, residual=options.unet_residual,
                          regularization=options.regularization)
@@ -104,6 +132,7 @@ def generator_unet(image, options, reuse=False, name="generator"):
         net = unet_block(image, 0, options)
         output = conv2d(net, options.output_c_dim, ks=1, s=1, padding='VALID', name='g_conv_final')
         if options.residualgan:
+            # scale = tf.get_variable("scale", [3], initializer=tf.constant_initializer(1.0))
             return 2 * tf.nn.tanh(output) + image
         else:
             return tf.nn.tanh(output)
@@ -150,7 +179,11 @@ def generator_resnet(image, options, reuse=False, name="generator"):
         d2 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
         pred = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
         tf.summary.histogram("g_pred_c", pred)
-        return 2 * pred + image
+
+        if options.residualgan:
+            return 2 * tf.nn.tanh(pred) + image
+        else:
+            return tf.nn.tanh(pred)
 
 
 def focal_abs_loss(in_, target, percentile=90.0):
@@ -163,17 +196,23 @@ def abs_loss(in_, target, padding="SAME"):
     return tf.reduce_mean(tf.abs(in_ - target))
 
 
-def mae_loss(in_, target):
+def mae_loss(in_, target, q=0.0):
     if target:
-        print(len(in_))
-        return tf.reduce_mean((in_[1] - tf.ones_like(in_[1])) ** 2) + tf.reduce_mean((in_[0] - tf.ones_like(in_[0])) ** 2)
+        like_fun = tf.ones_like
     else:
-        return tf.reduce_mean((in_[1] - tf.zeros_like(in_[1])) ** 2) + tf.reduce_mean((in_[0] - tf.zeros_like(in_[0])) ** 2)
+        like_fun = tf.zeros_like
+    #
+    # abs_ = [(i - like_fun(i)) ** 2 for i in in_]
+    # percentile_ = [tf.contrib.distributions.percentile(a, q=q) for a in abs_]
+    # masks = [tf.boolean_mask(a, tf.greater(a, p)) for a, p in zip(abs_, percentile_)]
+    # return tf.reduce_mean(masks[0]) + tf.reduce_mean(masks[1])
+
+    return tf.reduce_mean((in_ - like_fun(in_)) ** 2)
 
 
 def ssim_loss(in_,target):
     return 1 - tf.reduce_mean(tf.image.ssim(in_,target,2.0))
 
 
-def sce_loss(logits, labels):
+def sce_loss(logits, labels, q=0.0):
     return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=labels))

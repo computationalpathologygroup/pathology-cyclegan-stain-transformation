@@ -1,0 +1,22 @@
+data:
+    target:
+        default:
+        -   image: '{root}/{images}/target_wsi.tif'
+            labels:
+            - 1
+            mask: '{root}/{masks}/target_wsi_mask.tif'
+    source:
+        default:
+        -   image: '{root}/{images}/source_wsi.tif'
+            labels:
+            - 1
+            mask: '{root}/{masks}/source_wsi_mask.tif'
+distribution:
+    source: 0.5
+    target: 0.5
+path:
+    images: image_folder
+    masks: mask_folder
+    root: /path/to/root
+    stats: ''
+type: distributed
