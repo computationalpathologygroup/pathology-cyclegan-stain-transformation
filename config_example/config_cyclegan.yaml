@@ -1,132 +1,27 @@
 model:
-    residualgan: true
-    spectral: false
-    input_c_dim: 3
-    output_c_dim: 3
-    unet_depth: 3
-    unet_residual: false
-    use_maxpool: false
-    ngf: 48
-    ndf: 32
-    padding: 'REFLECT'
-    normalization: 1.0
-    regularization: 0.0
-    cycle_loss: 'focal'
+    residual: true
+    depth: 4
+    filter_growth: 48
+    disc_filters: 48
 
-system:
-    source:
-        process count: 10
-        sampler count: 10
-    target:
-        process count: 10
-        sampler count: 10
-    multi-threaded: true
-    ipc chunk size: 20
-    join timeout secs: 2000
-    response timeout secs: 2000
-    poll timeout secs: 2000
+sampler:
+    training:
+        iterations: 600
+        label_dist:
+            1: 1.0
+        patch_shapes:   
+            0.25: [128,128]
+        mask_spacing: 4.0
+        sampler_count: 3
+        label_mode: 'central'
+        cache_path: '/home/user/cache'
 
 training:
-    disc_standalone_epochs: 0
-    learning_rate: 0.0001
-    spacing: 0.5
-    epoch count: 150
-    decay_epoch: 20
+    batch_size: 6
+    learning_rate: 0.0002
+    epochs: 50
+    decay_epoch: 3
     beta1: 0.5
-    L1_lambda: 5.0
-    l2_lambda: 0.0
-    id_lambda: 0.0
-    D_lambda: 1.0
-    gamma: 0.3
-    use_logloss: false
-    mini_batch_size: 4
-    iterations:
-        source:
-            repetition count: 1
-            iteration count: 1
-            batch size: 200
-        target:
-            repetition count: 1
-            iteration count: 1
-            batch size: 200
-    buffer chunk size: 1000
-
-data:
-    images:
-        patch shapes:
-            0.5: [256, 256]
-        channels: [0, 1, 2]
-    labels:
-        label mode: 'load'
-        source:
-            mask pixel spacing: 2.0
-            label map:
-                1: 0
-            label ratios:
-                1: 1.0
-            strict selection: true
-        target:
-            mask pixel spacing: 2.0
-            label map:
-                1: 0
-            label ratios:
-                1: 1.0
-            strict selection: true
-        one hot: true
-        early: true
-    spacing tolerance: 0.5
-    range normalization:
-        enabled: true
-        early: false
-        type: 'rgb'
-        target range: [-1.0, 1.0]
-    weight mapping:
-        enabled: false
-        early: false
-        type: 'balancing'
-        normalize: false
-        clipping:
-            min: 0.1
-            max: 1.0
-    categories:
-        default: 1.0
-    purposes:
-        source: 0.5
-        target: 0.5
-    resources:
-        processes:
-            source: 0.5
-            target: 0.5
-        samplers:
-            source: 0.5
-            target: 0.5
-
-augmentation:
-    source:
-        - group: 'spatial'
-          random: true
-          items:
-              - type: 'flip'
-                probability: 0.33
-                flips: ['none', 'horizontal']
-              - type: 'rotate_90'
-                probability: 0.33
-                rotations: [0, 1, 2, 3]
-              - type: 'scale'
-                probability: 0.33
-                scaling: [0.9, 1.1]
-                order: 1
-    target:
-        - group: 'spatial'
-          random: true
-          items:
-              - type: 'flip'
-                probability: 0.33
-                flips: ['none', 'horizontal']
-              - type: 'rotate_90'
-                probability: 0.33
-                rotations: [0, 1, 2, 3]
-              - type: 'scale'
-                probability: 0.33
-                scaling: [0.9, 1.1]
-                order: 1
+    id_lambda: 0.5
+    cycle_lambda: 5.0
+    ssim_lambda: 0.0
