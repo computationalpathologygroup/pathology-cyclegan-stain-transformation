@@ -19,15 +19,10 @@ class trainer(object):
 
 
 
-    def train(self):
+    def setup_network(self):
         """Train cyclegan"""
         self._create_save_dirs()
-        generator = get_generator_from_config(self.sampler_param,
-                                              data_config_path=self.data_file_path,
-                                              albumentations_path=self.albumentations_path,
-                                              batch_size=self.training_param['batch_size'])
 
-        start_time = time.time()
 
         adv_loss_fn = tf.keras.losses.MeanSquaredError()
 
@@ -77,20 +72,31 @@ class trainer(object):
             gen_loss_fn=generator_loss_fn,
             disc_loss_fn=discriminator_loss_fn
         )
+
+        self._cycle_gan_model = cycle_gan_model
+
+    def train_network(self):
+        start_time = time.time()
+        generator = get_generator_from_config(self.sampler_param,
+                                              data_config_path=self.data_file_path,
+                                              albumentations_path=self.albumentations_path,
+                                              batch_size=self.training_param['batch_size'])
+
         callbacks = []
         scheduler = self._get_scheduler(self.training_param['learning_rate'], self.training_param['decay_epoch'])
         callbacks.append(GANLRScheduler(scheduler, verbose=1))
         callbacks.append(GANMonitor(*generator[0], output_path=os.path.join(self.output_dir, self.run_name, 'samples')))
         callbacks.append(GANSaveModels(os.path.join(self.output_dir, self.run_name, 'checkpoint')))
 
-        cycle_gan_model.fit(generator,
-                            epochs=self.training_param['epochs'],
-                            callbacks=callbacks,
-                            workers=4,
-                            use_multiprocessing=False,
-                            verbose=1)
+        self._cycle_gan_model.fit(generator,
+                                  epochs=self.training_param['epochs'],
+                                  callbacks=callbacks,
+                                  workers=4,
+                                  use_multiprocessing=False,
+                                  verbose=1)
 
         print(f"training finished in: {time.time() - start_time}")
+
 
     def _create_save_dirs(self):
         config_dir = os.path.join(self.output_dir, self.run_name, 'config')

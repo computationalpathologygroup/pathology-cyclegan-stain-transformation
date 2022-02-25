@@ -17,12 +17,17 @@ def get_config_from_yaml(config_path):
 
 def get_generator_from_config(sampler_param, data_config_path, albumentations_path, batch_size):
     transforms = albumentations.load(albumentations_path, data_format='yaml')
-    source_sampler = sampler.SimpleSampler(patch_source_filepath=data_config_path,
-                                           **sampler_param['training'],
-                                           partition='source')
-    target_sampler = sampler.SimpleSampler(patch_source_filepath=data_config_path,
-                                           **sampler_param['training'],
-                                           partition='target')
+    try:
+        source_sampler = sampler.SimpleSampler(patch_source_filepath=data_config_path,
+                                               **sampler_param['training'],
+                                               partition='source')
+        target_sampler = sampler.SimpleSampler(patch_source_filepath=data_config_path,
+                                               **sampler_param['training'],
+                                               partition='target')
+    except:
+        NotImplementedError("The original implementation uses an internal patch sampling library "
+                            "that is not publically available")
+
     generator = TFDataGenerator(source_sampler, target_sampler, transforms,
                                 batch_size=batch_size)
     return generator

@@ -15,12 +15,9 @@ def collect_arguments():
 
 if __name__ == '__main__':
     args = vars(collect_arguments())
-    if not os.path.exists(os.path.join(args['output_dir'], 'logs')):
-        os.makedirs(os.path.join(args['output_dir'], 'logs'))
-    if not os.path.exists(os.path.join(args['output_dir'], 'samples')):
-        os.makedirs(os.path.join(args['output_dir'], 'samples'))
     trainer = trainer(args)
-    trainer.train()
+    trainer.setup_network()
+    trainer.train_network()
 
 
 

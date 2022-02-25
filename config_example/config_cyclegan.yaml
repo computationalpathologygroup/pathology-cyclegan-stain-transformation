@@ -4,18 +4,6 @@ model:
     filter_growth: 48
     disc_filters: 48
 
-sampler:
-    training:
-        iterations: 600
-        label_dist:
-            1: 1.0
-        patch_shapes:   
-            0.25: [128,128]
-        mask_spacing: 4.0
-        sampler_count: 3
-        label_mode: 'central'
-        cache_path: '/home/user/cache'
-
 training:
     batch_size: 6
     learning_rate: 0.0002
