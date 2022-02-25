@@ -1,74 +1,79 @@
 import tensorflow as tf
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
-
+import tensorflow as tf
 from .utils import *
+import tensorflow_addons as tfa
 
-def batch_norm(x, name="batch_norm"):
-    return tf.contrib.layers.batch_norm(x, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, scope=name)
+class ReflectionPadding2D(tf.keras.layers.Layer):
+    """Implements Reflection Padding as a layer.
 
-def instance_norm(input, name="instance_norm"):
-    with tf.variable_scope(name):
-        depth = input.get_shape()[3]
-        scale = tf.get_variable("scale", [depth], initializer=tf.truncated_normal_initializer(1.0, 0.01, dtype=tf.float32))
-        offset = tf.get_variable("offset", [depth], initializer=tf.constant_initializer(0.0))
-        mean, variance = tf.nn.moments(input, axes=[1,2], keep_dims=True)
-        epsilon = 5e-2
-        normalized = (input-mean) / (variance + epsilon) ** 0.5
-        return scale*normalized + offset
+    Args:
+        padding(tuple): Amount of padding for the
+        spatial dimensions.
 
-def conv2d(input_, output_dim, ks=4, s=2, stddev=0.01, padding='SAME', name="conv2d", reg=0.0):
-    if padding == "REFLECT":
-        x = tf.pad(input_, [[0, 0], [1, 1], [1, 1], [0, 0]], "REFLECT")
-        p = "VALID"
+    Returns:
+        A padded tensor with the same type as the input tensor.
+    """
+
+    def __init__(self, padding=(1, 1), **kwargs):
+        self.padding = tuple(padding)
+        super(ReflectionPadding2D, self).__init__(**kwargs)
+
+    def call(self, input_tensor, mask=None):
+        padding_w, padding_h = self.padding
+        padding_tensor = [
+            [0, 0],
+            [padding_h, padding_h],
+            [padding_w, padding_w],
+            [0, 0],
+        ]
+        return tf.pad(input_tensor, padding_tensor, mode="REFLECT")
+
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({"padding": self.padding})
+        return config
+
+
+kernel_init = tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01)
+
+gamma_init = tf.keras.initializers.TruncatedNormal(mean=1.0, stddev=0.01)
+
+
+def downsample_bilinear(x):
+    shape = tf.shape(x)
+    new_shape = [shape[1] // 2, shape[2] // 2]
+    return tf.image.resize(x, new_shape)
+
+def upsample_bilinear(x):
+    shape = tf.shape(x)
+    new_shape = [shape[1] * 2, shape[2] * 2]
+    return tf.image.resize(x, new_shape)
+
+def unet_block(x, level, filter_growth, depth):
+    filters = filter_growth * 2 ** level
+    if depth - level > 0:
+        down_block = conv_block(x, filters)
+
+        x = downsample_bilinear(down_block)
+        x = unet_block(x, level + 1, filter_growth, depth)
+        x = upsample_bilinear(x)
+        x = tf.keras.layers.concatenate([down_block, x], axis=3)
+        x = conv_block(x, filters, up=True)
     else:
-        x = input_
-        p = padding
-    with tf.variable_scope(name):
-        y = tf.layers.conv2d(inputs=x,
-                             filters=output_dim,
-                             kernel_size=ks,
-                             strides=s,
-                             padding=p,
-                             use_bias=False,
-                             kernel_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                             kernel_regularizer=tf.keras.regularizers.l2(reg))
-        return y
+        x = conv_block(x, filters)
+    return x
 
-def maxpool(input, kernel_size=[2, 2], name="maxpool"):
-    with tf.variable_scope(name):
-        return tf.layers.max_pooling2d(input, pool_size=kernel_size, strides=2)
+def conv_block(x, filters, up=False, kernel_initializer=kernel_init, gamma_initializer=gamma_init):
+    x = ReflectionPadding2D()(x)
+    x = tf.keras.layers.Conv2D(filters, (3,3), (1,1), kernel_initializer=kernel_initializer, use_bias=False)(x)
+    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tfa.layers.GroupNormalization(groups=16, gamma_initializer=gamma_initializer, epsilon=1e-5)(x)
 
-
-def deconv2d(input_, output_dim, ks=4, s=2, stddev=0.02, name="deconv2d"):
-    with tf.variable_scope(name):
-        return tf.layers.conv2d_transpose(input_, output_dim, ks, s, padding='SAME', activation_fn=None,
-                                     weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                                     biases_initializer=None)
-
-def downsample_bilinear(_input, ratio=2, align_corners=True, name="downsampling2d_bilinear"):
-    shape = tf.shape(_input)
-    new_shape = [shape[1] // ratio, shape[2] // ratio]
-    with tf.variable_scope(name):
-        return tf.image.resize_images(_input, new_shape, align_corners=align_corners)
-
-# def downsample_bilinear(_input, ratio=2, align_corners=True, name="downsampling2d_bilinear"):
-#     shape = tf.cast(tf.shape(_input),dtype=tf.float32)
-#     new_shape = [shape[1] * ratio, shape[2] * ratio]
-#     with tf.variable_scope(name):
-#         return tf.image.resize_bilinear(_input, tf.cast(tf.round(new_shape), dtype=tf.int32), align_corners=align_corners)
-
-def upsample2d(_input, ratio=2, method=ResizeMethod.NEAREST_NEIGHBOR, align_corners=True, name="upsampling2d"):
-    shape = tf.shape(_input)
-    new_shape = [shape[1] * ratio, shape[2] * ratio]
-    with tf.variable_scope(name):
-        return tf.image.resize_images(_input, new_shape, method=method, align_corners=align_corners)
-
-
-def lrelu(x, leak=0.2, name="lrelu"):
-    return tf.maximum(x, leak*x)
-
-def crop_layer(layer_to_crop, target_layer):
-    down_shape = tf.shape(layer_to_crop)
-    up_shape = tf.shape(target_layer)
-    x, y = [(down_shape[1] - up_shape[1]) // 2, (down_shape[2] - up_shape[2]) // 2]
-    return layer_to_crop[:,x:-x,y:-y,:]
+    x = ReflectionPadding2D()(x)
+    x = tf.keras.layers.Conv2D(filters, (3, 3), (1, 1), kernel_initializer=kernel_initializer, use_bias=False)(x)
+    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    if not up:
+        x = tfa.layers.GroupNormalization(groups=16, gamma_initializer=gamma_initializer, epsilon=1e-5)(x)
+    return x

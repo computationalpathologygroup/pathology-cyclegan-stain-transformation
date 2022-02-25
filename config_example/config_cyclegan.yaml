@@ -1,0 +1,27 @@
+model:
+    residual: true
+    depth: 4
+    filter_growth: 48
+    disc_filters: 48
+
+sampler:
+    training:
+        iterations: 600
+        label_dist:
+            1: 1.0
+        patch_shapes:   
+            0.25: [128,128]
+        mask_spacing: 4.0
+        sampler_count: 3
+        label_mode: 'central'
+        cache_path: '/home/user/cache'
+
+training:
+    batch_size: 6
+    learning_rate: 0.0002
+    epochs: 50
+    decay_epoch: 3
+    beta1: 0.5
+    id_lambda: 0.5
+    cycle_lambda: 5.0
+    ssim_lambda: 0.0
