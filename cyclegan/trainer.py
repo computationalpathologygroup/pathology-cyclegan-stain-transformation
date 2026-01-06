@@ -148,8 +148,8 @@ class GANSaveModels(tf.keras.callbacks.Callback):
         self._output_path = output_path
 
     def on_epoch_begin(self, epoch, logs=None):
-        gen_G_path = os.path.join(self._output_path, "source_to_target.h5")
-        gen_F_path = os.path.join(self._output_path, "target_to_source.h5")
+        gen_G_path = os.path.join(self._output_path, f"source_to_target_epoch{epoch}.h5")
+        gen_F_path = os.path.join(self._output_path, f"target_to_source_epoch{epoch}.h5")
         self.model.gen_G.save(gen_G_path, overwrite=True)
         self.model.gen_F.save(gen_F_path, overwrite=True)
 
